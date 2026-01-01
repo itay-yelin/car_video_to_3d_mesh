@@ -2,6 +2,8 @@ import pycolmap
 import argparse
 import os
 from pathlib import Path
+import open3d as o3d
+import numpy as np
 
 def run_reconstruction(data_dir, output_dir):
     data_path = Path(data_dir)
@@ -71,6 +73,37 @@ def run_reconstruction(data_dir, output_dir):
     pycolmap.stereo_fusion(dense_path, dense_ply)
     
     print(f"[*] Dense point cloud saved to {dense_ply}")
+
+    # --- Meshing ---
+    mesh_output = output_path / "final_mesh.ply"
+    create_mesh_from_dense_pcd(dense_ply, mesh_output)
+
+def create_mesh_from_dense_pcd(pcd_path, output_mesh_path, depth=9):
+    print(f"[*] Loading dense point cloud from {pcd_path}...")
+    pcd = o3d.io.read_point_cloud(str(pcd_path))
+    
+    # 1. Estimate Normals (Crucial for Poisson)
+    print("[*] Estimating normals...")
+    pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
+    # Align normals to point towards the camera locations (heuristic) 
+    # or just orient consistently for a closed object
+    pcd.orient_normals_consistent_tangent_plane(100)
+
+    # 2. Poisson Surface Reconstruction
+    print(f"[*] Running Poisson Reconstruction (depth={depth})...")
+    with o3d.utility.VerbosityContextManager(o3d.utility.VerbosityLevel.Debug) as cm:
+        mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+            pcd, depth=depth
+        )
+    
+    # 3. Clean the Mesh (Remove "Bubble" artifacts)
+    # Poisson creates a "bubble" around the object. We remove low-density vertices.
+    print("[*] Cleaning mesh artifacts...")
+    vertices_to_remove = densities < np.quantile(densities, 0.1)
+    mesh.remove_vertices_by_mask(vertices_to_remove)
+    
+    print(f"[*] Saving final mesh to {output_mesh_path}")
+    o3d.io.write_triangle_mesh(str(output_mesh_path), mesh)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
