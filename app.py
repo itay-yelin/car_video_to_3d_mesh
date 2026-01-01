@@ -77,6 +77,7 @@ with st.sidebar:
     # 2. Pipeline Settings
     st.subheader("2. Pipeline Config")
     sample_rate = st.slider("Frame Sample Rate", 5, 60, 10, help="Process every Nth frame")
+    blur_threshold = st.slider("Blur Threshold", 0.0, 500.0, 0.0, help="Lower = Keep more blurry frames") # Default 0 to ensure we get frames
     run_btn = st.button("🚀 START PIPELINE")
 
     st.markdown("---")
@@ -144,7 +145,7 @@ if run_btn:
         # Step 1: Preprocess
         st.info(f"[*] Starting Preprocessing on {video_path}...")
         os.makedirs("project_output/data", exist_ok=True)
-        cmd_1 = f"python preprocess.py --video {video_path} --out project_output/data --sample_rate {sample_rate}"
+        cmd_1 = f"python preprocess.py --video {video_path} --out project_output/data --sample_rate {sample_rate} --blur_threshold {blur_threshold}"
         log_1 = run_command(cmd_1)
         if log_1:
             st.code(log_1, language="bash")
