@@ -98,8 +98,9 @@ with tab_data:
         st.subheader("Frame Inspector")
         
         # Check if processing is done
-        image_dir = "project_data/images"
-        mask_dir = "project_data/masks"
+        # Check if processing is done
+        image_dir = "project_output/data/images"
+        mask_dir = "project_output/data/masks"
         
         if os.path.exists(image_dir) and len(os.listdir(image_dir)) > 0:
             frames = sorted([f for f in os.listdir(image_dir) if f.endswith(".jpg")])
@@ -126,7 +127,7 @@ with tab_data:
             else:
                 st.caption(f"Viewing: {frame_name} | **Raw RGB**")
 
-            st.image(img, use_column_width=True)
+            st.image(img, use_container_width=True)
             
         else:
             st.warning("No processed frames found. Run the pipeline first.")
@@ -139,13 +140,15 @@ if run_btn:
         
         # Step 1: Preprocess
         console.code(f"[*] Starting Preprocessing on {video_path}...")
-        cmd_1 = f"python preprocess.py --video {video_path} --out project_data --sample_rate {sample_rate}"
+        os.makedirs("project_output/data", exist_ok=True)
+        cmd_1 = f"python preprocess.py --video {video_path} --out project_output/data --sample_rate {sample_rate}"
         proc = run_command(cmd_1)
         st.toast("Preprocessing Complete!", icon="✅")
         
         # Step 2: Reconstruct
         console.code(f"[*] Starting Reconstruction (this may take a while)...")
-        cmd_2 = f"python reconstruct.py --data project_data --out reconstruction"
+        os.makedirs("project_output/reconstruction", exist_ok=True)
+        cmd_2 = f"python reconstruct.py --data project_output/data --out project_output/reconstruction"
         proc = run_command(cmd_2)
         st.toast("Reconstruction Complete!", icon="🎉")
         
@@ -156,15 +159,25 @@ if run_btn:
 with tab_3d:
     st.subheader("Interactive 3D View")
     
-    ply_file = "reconstruction/dense/fused.ply" 
+    # Priority: Mesh -> Dense -> Sparse
+    # We prefer the mesh if available, but Plotly is better at points. 
+    # Let's stick to Dense Point Cloud for the "Interactive View" as requested, 
+    # but check project_output folder.
+    
+    base_dir = "project_output/reconstruction"
+    ply_file = os.path.join(base_dir, "dense", "fused.ply") 
+    
     # Fallback to sparse if dense missing
     if not os.path.exists(ply_file):
-        ply_file = "reconstruction/sparse/0/points3D.ply" # COLMAP sparse output often has different names, check your convert script
-        # Actually your reconstruct.py outputs to: reconstruction/fused.ply (Sparse) and reconstruction/dense/fused.ply (Dense)
-        
-        # Let's try the Sparse one if Dense failed
-        if not os.path.exists("reconstruction/dense/fused.ply"):
-            ply_file = "reconstruction/fused.ply"
+        # Depending on colmap version/output
+        candidates = [
+            os.path.join(base_dir, "sparse", "0", "points3D.ply"),
+            os.path.join(base_dir, "fused.ply")
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                ply_file = c
+                break
 
     if os.path.exists(ply_file):
         st.success(f"loaded model: {ply_file}")

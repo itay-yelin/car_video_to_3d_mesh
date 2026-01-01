@@ -5,3 +5,6 @@ project_data/
 project_data_test/
 reconstruction/
 .DS_Store
+.venv/
+project_output/
+temp_video.mp4
