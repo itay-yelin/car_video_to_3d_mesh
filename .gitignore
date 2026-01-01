@@ -2,5 +2,6 @@ venv/
 __pycache__/
 *.pyc
 project_data/
+project_data_test/
 reconstruction/
 .DS_Store

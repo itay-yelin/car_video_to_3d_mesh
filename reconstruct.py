@@ -18,34 +18,19 @@ def run_reconstruction(data_dir, output_dir):
     print(f"[*] Creating database at {database_path}...")
     
     # 1. Feature Extraction with Masks
-    # We need to map images to their corresponding masks.
-    # Pycolmap/COLMAP expects a specific mask handling.
-    # The simplest way via pycolmap API:
-    print("[*] Extracting features (SIFT)...")
+    print("[*] Extracting features (SIFT) with Masks...")
     
-    # Verify masks exist and match image names (png vs jpg)
-    # This setup assumes Pycolmap can find masks if we configure the options correctly
-    # or we iterate manually.
-    # Simple extraction:
+    # Define options to use masks
+    reader_options = pycolmap.ImageReaderOptions()
+    reader_options.mask_path = masks_path  # Point to the masks folder
+    
+    # Run extraction
     pycolmap.extract_features(
         database_path, 
-        images_path,
-        camera_mode=pycolmap.CameraMode.SINGLE,
-        image_list=None, # Process all
-        descriptor_normalization=True
-        # Note: Masking in pure pycolmap.extract_features usually requires SiftExtractionOptions
-        # and ensuring the reader finds the masks.
-        # But commonly, if we cannot guarantee mask paths, we might need a workaround.
-        # However, for this PoC, we will try the standard method:
-        # If a file "image_name.jpg.png" exists in the mask_path?
-        # COLMAP looks for masks in the same folder or specific struct. 
+        images_path, 
+        reader_options=reader_options,
+        verbose=True
     )
-    
-    # Wait, pycolmap.extract_features doesn't easily accept a separate mask folder argument in all versions.
-    # A robust hack for 1-day PoC: Move masks to next to images or rename them?
-    # Or better: "Crucial: It must apply the masks".
-    # Let's try to pass `ImageReaderOptions` if exposed.
-    # If not, we warn the user. But let's check basic usage.
     
     print("[*] Matching features (Sequential)...")
     pycolmap.match_sequential(database_path, overlap=5) # 5-10 overlap for video frames
@@ -69,6 +54,23 @@ def run_reconstruction(data_dir, output_dir):
     best_model.export_ply(ply_path)
     print(f"[*] Reconstruction finished. Saved to {output_path}")
     print(f"[*] Point cloud: {ply_path}")
+
+    # --- Dense Reconstruction (MVS) ---
+    print("[*] Running Dense Reconstruction (MVS)...")
+    dense_path = output_path / "dense"
+    dense_path.mkdir(exist_ok=True)
+    
+    # Undistort images for dense stereo
+    pycolmap.undistort_images(dense_path, sparse_dir, images_path)
+    
+    # Stereo matching (The heavy lifting)
+    pycolmap.patch_match_stereo(dense_path) 
+    
+    # Fusion to dense point cloud
+    dense_ply = dense_path / "fused.ply"
+    pycolmap.stereo_fusion(dense_path, dense_ply)
+    
+    print(f"[*] Dense point cloud saved to {dense_ply}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

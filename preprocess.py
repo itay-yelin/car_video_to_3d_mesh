@@ -49,7 +49,8 @@ def process_video(video_path, output_dir, sample_rate=10, blur_threshold=100.0):
             if fm > blur_threshold:
                 filename = f"frame_{saved_count:05d}.jpg"
                 img_path = os.path.join(img_dir, filename)
-                mask_path = os.path.join(mask_dir, filename.replace(".jpg", ".png"))
+                # COLMAP SAFE NAMING: frame_00000.jpg -> frame_00000.jpg.png
+                mask_path = os.path.join(mask_dir, filename + ".png")
 
                 # Save original image
                 cv2.imwrite(img_path, frame)
