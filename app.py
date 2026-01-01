@@ -22,10 +22,14 @@ st.markdown("""
 # --- HELPER FUNCTIONS ---
 def run_command(cmd):
     """Runs shell commands and logs to Streamlit."""
-    process = subprocess.Popen(
-        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-    )
-    return process
+    try:
+        result = subprocess.run(
+            cmd, shell=True, check=True, capture_output=True, text=True
+        )
+        return result.stdout
+    except subprocess.CalledProcessError as e:
+        st.error(f"Command failed: {cmd}\n\nError:\n{e.stderr}")
+        return None
 
 def load_ply_as_plotly(ply_path, sample_rate=10):
     """Loads a PLY file and converts to Plotly 3D Scatter (Subsampled for speed)."""
@@ -136,23 +140,33 @@ with tab_data:
 if run_btn:
     with tab_logs:
         st.subheader("Execution Logs")
-        console = st.empty()
         
         # Step 1: Preprocess
-        console.code(f"[*] Starting Preprocessing on {video_path}...")
+        st.info(f"[*] Starting Preprocessing on {video_path}...")
         os.makedirs("project_output/data", exist_ok=True)
         cmd_1 = f"python preprocess.py --video {video_path} --out project_output/data --sample_rate {sample_rate}"
-        proc = run_command(cmd_1)
-        st.toast("Preprocessing Complete!", icon="✅")
+        log_1 = run_command(cmd_1)
+        if log_1:
+            st.code(log_1, language="bash")
+            st.toast("Preprocessing Complete!", icon="✅")
+        else:
+            st.error("Preprocessing Failed! Check logs above.")
+            st.stop()
         
         # Step 2: Reconstruct
-        console.code(f"[*] Starting Reconstruction (this may take a while)...")
+        st.info(f"[*] Starting Reconstruction (this may take a while)...")
         os.makedirs("project_output/reconstruction", exist_ok=True)
         cmd_2 = f"python reconstruct.py --data project_output/data --out project_output/reconstruction"
-        proc = run_command(cmd_2)
-        st.toast("Reconstruction Complete!", icon="🎉")
+        log_2 = run_command(cmd_2)
+        if log_2:
+            st.code(log_2, language="bash")
+            st.toast("Reconstruction Complete!", icon="🎉")
+        else:
+            st.error("Reconstruction Failed! Check logs above.")
+            st.stop()
         
-        # Trigger Reload
+        # Trigger Reload (with delay to let user see status)
+        time.sleep(2)
         st.rerun()
 
 # --- TAB 2: 3D RECONSTRUCTION ---
